@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using FileHelpers;
 using ImportBagCsv.DAL;
 using ImportBagCsv.Models;
@@ -17,25 +18,29 @@ namespace ImportBagCsv
         private Dictionary<string, IList<Adres>> _adressen;
         private Plaats _huidigePlaats;
         private Adres _huidigAdres;
+        private string _currentMelding;
 
         public ImportCSV()
         {
-            _adressen = new Dictionary<string, IList<Adres>>();
-            _plaatsen = new Dictionary<string, IList<Plaats>>();
-            _gemeenten = new Dictionary<string, IList<Gemeente>>();
-            _provincies = new Dictionary<string, Provincie>();
+            _adressen = new Dictionary<string, IList<Adres>>(500009);
+            _plaatsen = new Dictionary<string, IList<Plaats>>(7901);
+            _gemeenten = new Dictionary<string, IList<Gemeente>>(601);
+            _provincies = new Dictionary<string, Provincie>(13);
             _huidigAdres = null;
             _huidigePlaats = null;
+            _currentMelding = "";
         }
 
         public void DoImport()
         {
             long counter = 0L;
             long curCounter = 0L;
-
+            DateTime startTime;
+            DateTime endTime;
             var engine = new FileHelperAsyncEngine<CsvModel>();
 
             // Read
+            startTime=DateTime.Now;
             using (engine.BeginReadFile(@"D:\Bag\bagadres-full.csv"))
             {
                 using (var context = new Context())
@@ -46,15 +51,16 @@ namespace ImportBagCsv
                         Add(model.Straat, model.Huisnummer, model.Huisletter,
                             model.Huisnummertoevoeging,
                             model.Postcode, model.Woonplaats, model.Gemeente, model.Provincie, context);
-                        if (model.Postcode.Equals("7944TV") && model.Huisnummer == 151)
-                        {
-                            Console.WriteLine(
-                                $"Gevonden!\n{model.Straat} {model.Huisnummer}, {model.Postcode} {model.Woonplaats}, {model.Gemeente}, {model.Provincie}");
-                        }
+                        // if (model.Postcode.Equals("7944TV") && model.Huisnummer == 151)
+                        // {
+                        //     LeegRegel();
+                        //     Console.WriteLine(
+                        //         $"Gevonden!\n{model.Straat} {model.Huisnummer}, {model.Postcode} {model.Woonplaats}, {model.Gemeente}, {model.Provincie}");
+                        // }
 
                         counter++;
                         curCounter++;
-                        if (curCounter == 50000L)
+                        if (curCounter == 99999L)
                         {
                             context.SaveChanges();
                             curCounter = 0L;
@@ -62,8 +68,13 @@ namespace ImportBagCsv
                     }
                     context.SaveChanges();
                 }
-
-                Console.WriteLine($"Er zijn {counter.ToString()} records gelezen!");
+                endTime=DateTime.Now;
+                TimeSpan benodigdeTijd = endTime - startTime;
+                int uren = benodigdeTijd.Hours;
+                int minuten = benodigdeTijd.Minutes;
+                int seconden = benodigdeTijd.Seconds % 60;
+                LeegRegel();
+                Console.WriteLine($"\rEr zijn {counter.ToString()} records gelezen in {uren} { (uren>1 ? "uren" : "uur" )}, {minuten} { (minuten >1 ? "minuten" : "minuut")} en {seconden} { (seconden > 1 ? "seconden" : "seconde")}!");
             }
 
 
@@ -124,6 +135,8 @@ namespace ImportBagCsv
                     else
                     {
                         adressen.Add(_adres);
+                        _adressen.Remove(postcode);
+                        _adressen.Add(postcode, adressen);
                     }
                 }
             }
@@ -135,38 +148,55 @@ namespace ImportBagCsv
         private Plaats getPlaats(Context _context, string plaatsNaam, string gemeenteNaam, string provincieNaam)
         {
             Plaats _plaats = null;
-            List<Plaats> plaatsen = _plaatsen.GetValueOrDefault(plaatsNaam)?.ToList();
-            if(plaatsen != null && plaatsen.Count>0)
+
+            if (_huidigePlaats != null && _huidigePlaats.Naam == plaatsNaam &&
+                _huidigePlaats.Gemeente.Naam == gemeenteNaam && _huidigePlaats.Gemeente.Provincie.Naam == provincieNaam)
             {
-                foreach(Plaats plaats in plaatsen)
-                {
-                    if(plaats.Naam == plaatsNaam && plaats.Gemeente.Naam == gemeenteNaam && plaats.Gemeente.Provincie.Naam == provincieNaam)
-                    {
-                        _plaats = plaats;
-                    }
-                }
+                _plaats = _huidigePlaats;
             }
 
             if (_plaats == null)
             {
-                Gemeente _gemeente = GetGemeente(_context, gemeenteNaam, provincieNaam);
-                _plaats = new Plaats() { Naam = plaatsNaam, Gemeente = _gemeente };
-                _context.Plaatsen.Add(_plaats);
-                if(plaatsen == null)
+                List<Plaats> plaatsen = _plaatsen.GetValueOrDefault(plaatsNaam)?.ToList();
+                if (plaatsen != null && plaatsen.Count > 0)
                 {
-                    _plaatsen.Add(plaatsNaam, new List<Plaats>() { _plaats });
-                } else
-                {
-                    plaatsen.Add(_plaats);
+                    foreach (Plaats plaats in plaatsen)
+                    {
+                        if (plaats.Naam == plaatsNaam && plaats.Gemeente.Naam == gemeenteNaam &&
+                            plaats.Gemeente.Provincie.Naam == provincieNaam)
+                        {
+                            _plaats = plaats;
+                            break;
+                        }
+                    }
                 }
+
+                if (_plaats == null)
+                {
+                    Gemeente _gemeente = GetGemeente(_context, gemeenteNaam, provincieNaam);
+                    _plaats = new Plaats() {Naam = plaatsNaam, Gemeente = _gemeente};
+                    _context.Plaatsen.Add(_plaats);
+                    if (plaatsen == null)
+                    {
+                        _plaatsen.Add(plaatsNaam, new List<Plaats>() {_plaats});
+                    }
+                    else
+                    {
+                        plaatsen.Add(_plaats);
+                        _plaatsen.Remove(plaatsNaam);
+                        _plaatsen.Add(plaatsNaam, plaatsen);
+                    }
+                }
+
+                _huidigePlaats = _plaats;
             }
 
-            _huidigePlaats = _plaats;
             return _plaats;
         }
 
         private Gemeente GetGemeente(Context _context, string gemeenteNaam, string provincieNaam)
         {
+            string NieuweMelding = "";
             Gemeente _gemeente = null;
             List<Gemeente> gemeenten = _gemeenten.GetValueOrDefault(gemeenteNaam)?.ToList();
             if(gemeenten != null && gemeenten.Count > 0)
@@ -182,7 +212,6 @@ namespace ImportBagCsv
             
             if (_gemeente == null)
             {
-                Console.WriteLine($"Bezig met verwerken van {gemeenteNaam}...");
                 Provincie _provincie = GetProvincie(_context, provincieNaam);
                 _gemeente = new Gemeente() { Naam = gemeenteNaam, Provincie = _provincie };
                 _context.Gemeenten.Add(_gemeente);
@@ -192,9 +221,19 @@ namespace ImportBagCsv
                 } else
                 {
                     gemeenten.Add(_gemeente);
+                    _gemeenten.Remove(gemeenteNaam);
+                    _gemeenten.Add(gemeenteNaam, gemeenten);
                 }
-            }
 
+                NieuweMelding = string.Format("Bezig met verwerken van {0} (NIEUW) in de provincie {1}...", gemeenteNaam, _gemeente.Provincie.Naam);
+                Console.Write("\rBezig met verwerken van {0} (NIEUW) in de provincie {1}...");
+            }
+            else
+            {
+                NieuweMelding = string.Format("Bezig met verwerken van {0} in de provincie {1}...",
+                    gemeenteNaam, _gemeente.Provincie.Naam);
+            }
+            LeegRegel(NieuweMelding);
             return _gemeente;
         }
 
@@ -203,7 +242,6 @@ namespace ImportBagCsv
            Provincie _provincie = _provincies.GetValueOrDefault(provincie);
             if (_provincie == null)
             {
-                Console.WriteLine($"Bezig met verwerken van {provincie}...");
                 _provincie = new Provincie() { Naam = provincie };
                 _context.Provincies.Add(_provincie);
                 _provincies.Add(provincie, _provincie);
@@ -211,5 +249,16 @@ namespace ImportBagCsv
             return _provincie;
         }
 
+        private void LeegRegel()
+        {
+            Console.Write(string.Format("\r{0}\r", "".PadRight(_currentMelding.Length)));
+        }
+
+        private void LeegRegel(string nieuweMelding)
+        {
+            LeegRegel();
+            _currentMelding = nieuweMelding;
+            Console.Write(_currentMelding);
+        }
     }
 }

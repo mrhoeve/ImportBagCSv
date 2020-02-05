@@ -17,10 +17,12 @@ namespace ImportBagCsv.DAL
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Nummer>()
-                .HasIndex(n => new { n.Huisnummer, n.Huisletter, n.Huisnummertoevoeging});
+                .HasIndex(n => n.Huisnummer)
+                .IncludeProperties(n => new { n.Huisletter, n.Huisnummertoevoeging});
 
             modelBuilder.Entity<Adres>()
-                .HasIndex(a => new {a.Straat, a.Postcode});
+                .HasIndex(a => a.Postcode)
+                .IncludeProperties(a => a.Straat);
 
             modelBuilder.Entity<Gemeente>()
                 .HasIndex(g => g.Naam);

@@ -1,8 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ImportBagCsv.Migrations
 {
-    public partial class Initial : Migration
+    public partial class Initialinitialisation : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -108,9 +109,10 @@ namespace ImportBagCsv.Migrations
                 column: "PlaatsId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Adressen_Straat_Postcode",
+                name: "IX_Adressen_Postcode",
                 table: "Adressen",
-                columns: new[] { "Straat", "Postcode" });
+                column: "Postcode")
+                .Annotation("SqlServer:Include", new[] { "Straat" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Gemeenten_Naam",
@@ -128,9 +130,10 @@ namespace ImportBagCsv.Migrations
                 column: "AdresId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Nummers_Huisnummer_Huisletter_Huisnummertoevoeging",
+                name: "IX_Nummers_Huisnummer",
                 table: "Nummers",
-                columns: new[] { "Huisnummer", "Huisletter", "Huisnummertoevoeging" });
+                column: "Huisnummer")
+                .Annotation("SqlServer:Include", new[] { "Huisletter", "Huisnummertoevoeging" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Plaatsen_GemeenteId",
