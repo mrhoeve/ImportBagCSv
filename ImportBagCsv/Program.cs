@@ -7,7 +7,8 @@ namespace ImportBagCsv
         static void Main(string[] args)
         {
             Console.WriteLine("momentje!");
-            ImportCSV.DoImport();
+            ImportCSV importCSV = new ImportCSV();
+            importCSV.DoImport();
         }
     }
 }
